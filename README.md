@@ -11,6 +11,21 @@ A simple Python script that batch converts images from one format to another, re
 - Handles transparency (e.g. RGBA PNG → JPG) automatically
 - Optional resize: downscale images to a specified max width while preserving aspect ratio
 
+## Getting Started
+
+### 1. Download the script
+
+Clone this repository to your machine:
+
+```bash
+git clone https://github.com/vic3e/image-converter.git
+cd image-converter
+```
+
+Or download `image_converter.py` directly and place it wherever you like.
+
+### 2. Install dependencies
+
 ## Requirements
 
 - Python 3.x
@@ -25,9 +40,25 @@ pip install Pillow pillow-heif
 
 ## Usage
 
-Run the script from the folder containing your images, or place it there and double-click:
+### Step 1 — Place the script
+
+Copy `image_converter.py` into the folder that contains your images (or into a parent folder with subfolders of images). The script scans the folder it is run from.
+
+```
+📁 Photos/              ← run the script from here
+   image_converter.py
+   📁 Beach/
+      IMG_001.heic
+   📁 Family/
+      IMG_002.heic
+```
+
+### Step 2 — Run it
+
+Open a Terminal, navigate to that folder, and run:
 
 ```bash
+cd /path/to/Photos
 python image_converter.py
 ```
 
