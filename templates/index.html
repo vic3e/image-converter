@@ -835,8 +835,8 @@
               </div>
             </td>
             <td>${formatBytes(file.size)}</td>
-            <td><span style="color: var(--text-muted); font-size: 12px;">Ready to convert</span></td>
-            <td style="text-align: right;">
+            <td id="result-cell-${index}"><span style="color: var(--text-muted); font-size: 12px;">Ready to convert</span></td>
+            <td id="action-cell-${index}" style="text-align: right;">
               <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px;" onclick="removeStagedFile(${index})">&times;</button>
             </td>
           `;
@@ -859,103 +859,140 @@
         renderQueue();
       });
 
-      // Execute Conversion
+      // Execute Conversion (Per-file upload to prevent 413 Payload Too Large on GCP Cloud Run)
       convertBtn.addEventListener('click', async () => {
         if (stagedFiles.length === 0) return;
 
         convertBtn.disabled = true;
         clearQueueBtn.disabled = true;
         progressBarWrap.classList.add('visible');
-        progressBarFill.style.width = '35%';
+        progressBarFill.style.width = '5%';
 
-        const formData = new FormData();
-        stagedFiles.forEach(f => formData.append('files', f));
-        formData.append('preset', currentPreset);
-
-        if (currentPreset === 'custom') {
-          formData.append('format', document.getElementById('customFormat').value);
-          formData.append('max_width', document.getElementById('customWidth').value);
-          formData.append('quality', customQuality.value);
-        }
-
+        let sessionId = null;
         try {
-          progressBarFill.style.width = '70%';
-          const res = await fetch('/api/convert', { method: 'POST', body: formData });
-          if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-          const data = await res.json();
-          progressBarFill.style.width = '100%';
-
-          setTimeout(() => {
-            progressBarWrap.classList.remove('visible');
-            progressBarFill.style.width = '0%';
-          }, 400);
-
-          renderResults(data);
+          const startRes = await fetch('/api/session/start', { method: 'POST' });
+          if (!startRes.ok) throw new Error(`HTTP ${startRes.status}`);
+          const startData = await startRes.json();
+          sessionId = startData.session_id;
         } catch (err) {
-          alert('Conversion failed: ' + err.message);
+          alert('Could not start conversion session: ' + err.message);
           convertBtn.disabled = false;
           clearQueueBtn.disabled = false;
           progressBarWrap.classList.remove('visible');
+          return;
         }
-      });
 
-      function renderResults(data) {
+        let totalOriginal = 0;
+        let totalConverted = 0;
+        let successCount = 0;
+
+        for (let i = 0; i < stagedFiles.length; i++) {
+          const file = stagedFiles[i];
+          const resultCell = document.getElementById(`result-cell-${i}`);
+          const actionCell = document.getElementById(`action-cell-${i}`);
+
+          if (resultCell) {
+            resultCell.innerHTML = '<span style="color: var(--alt-orange); font-weight: 700;">Converting...</span>';
+          }
+          if (actionCell) {
+            actionCell.innerHTML = '';
+          }
+
+          const fileFormData = new FormData();
+          fileFormData.append('file', file);
+          fileFormData.append('preset', currentPreset);
+
+          if (currentPreset === 'custom') {
+            fileFormData.append('format', document.getElementById('customFormat').value);
+            fileFormData.append('max_width', document.getElementById('customWidth').value);
+            fileFormData.append('quality', customQuality.value);
+          }
+
+          try {
+            const fileRes = await fetch(`/api/session/${sessionId}/convert-file`, {
+              method: 'POST',
+              body: fileFormData
+            });
+
+            if (!fileRes.ok) throw new Error(`HTTP ${fileRes.status}`);
+            const fileData = await fileRes.json();
+            const item = fileData.file;
+
+            totalOriginal += (item && item.original_size) ? item.original_size : file.size;
+
+            if (item && item.status === 'success') {
+              successCount++;
+              totalConverted += item.converted_size;
+              const savingsHtml = item.savings_percent > 0 
+                ? `<span class="savings-badge">-${item.savings_percent}%</span>` 
+                : '';
+
+              if (resultCell) {
+                resultCell.innerHTML = `
+                  <span style="font-weight: 700; color: var(--text-primary);">${formatBytes(item.converted_size)}</span>
+                  ${savingsHtml}
+                  <span style="color: var(--text-muted); font-size: 11px; margin-left: 6px;">(${item.width}×${item.height})</span>
+                `;
+              }
+              if (actionCell) {
+                actionCell.innerHTML = `
+                  <a href="${item.download_url}" download="${item.converted_name}" class="btn btn-primary btn-sm">
+                    Download
+                  </a>
+                `;
+              }
+            } else {
+              if (resultCell) {
+                resultCell.innerHTML = `<span style="color: var(--error-red); font-weight: 600;">Failed: ${escapeHtml(item.error || 'Conversion error')}</span>`;
+              }
+            }
+          } catch (err) {
+            totalOriginal += file.size;
+            if (resultCell) {
+              resultCell.innerHTML = `<span style="color: var(--error-red); font-weight: 600;">Failed: ${escapeHtml(err.message)}</span>`;
+            }
+          }
+
+          const progressPct = Math.round(((i + 1) / stagedFiles.length) * 100);
+          progressBarFill.style.width = `${progressPct}%`;
+        }
+
+        // Finalize ZIP bundle
+        let zipUrl = null;
+        try {
+          const finalRes = await fetch(`/api/session/${sessionId}/finalize`, { method: 'POST' });
+          if (finalRes.ok) {
+            const finalData = await finalRes.json();
+            zipUrl = finalData.zip_url;
+          }
+        } catch (e) {
+          console.warn('Finalize ZIP failed:', e);
+        }
+
+        setTimeout(() => {
+          progressBarWrap.classList.remove('visible');
+          progressBarFill.style.width = '0%';
+        }, 400);
+
         convertBtn.style.display = 'none';
         clearQueueBtn.style.display = 'none';
 
-        summaryTitle.textContent = `Conversion Complete · ${data.successful_count} of ${data.total_files} Images`;
-        summarySub.innerHTML = `Original: <strong>${formatBytes(data.total_original_size)}</strong> ➔ Converted: <strong>${formatBytes(data.total_converted_size)}</strong> (<span class="summary-stat-highlight">Saved ${data.total_savings_percent}%</span>)`;
-        
-        if (data.zip_url) {
-          downloadAllZipBtn.href = data.zip_url;
+        const totalSavings = (totalOriginal > 0 && totalConverted > 0)
+          ? Math.round(((totalOriginal - totalConverted) / totalOriginal) * 1000) / 10
+          : 0;
+
+        summaryTitle.textContent = `Conversion Complete · ${successCount} of ${stagedFiles.length} Images`;
+        summarySub.innerHTML = `Original: <strong>${formatBytes(totalOriginal)}</strong> ➔ Converted: <strong>${formatBytes(totalConverted)}</strong> (<span class="summary-stat-highlight">Saved ${totalSavings}%</span>)`;
+
+        if (zipUrl) {
+          downloadAllZipBtn.href = zipUrl;
           downloadAllZipBtn.style.display = 'inline-flex';
         } else {
           downloadAllZipBtn.style.display = 'none';
         }
         summaryCard.classList.add('visible');
+      });
 
-        fileTableBody.innerHTML = '';
-        data.files.forEach(item => {
-          const tr = document.createElement('tr');
-          if (item.status === 'success') {
-            const savingsHtml = item.savings_percent > 0 
-              ? `<span class="savings-badge">-${item.savings_percent}%</span>` 
-              : '';
-            tr.innerHTML = `
-              <td>
-                <div class="file-name-cell">
-                  <span class="ext-badge ${getExtBadgeClass(item.target_format.toLowerCase())}">${item.target_format}</span>
-                  <span>${escapeHtml(item.converted_name)}</span>
-                </div>
-              </td>
-              <td>${formatBytes(item.original_size)}</td>
-              <td>
-                <span style="font-weight: 700; color: var(--text-primary);">${formatBytes(item.converted_size)}</span>
-                ${savingsHtml}
-                <span style="color: var(--text-muted); font-size: 11px; margin-left: 6px;">(${item.width}×${item.height})</span>
-              </td>
-              <td style="text-align: right;">
-                <a href="${item.download_url}" download="${item.converted_name}" class="btn btn-primary btn-sm">
-                  Download
-                </a>
-              </td>
-            `;
-          } else {
-            tr.innerHTML = `
-              <td>
-                <div class="file-name-cell">
-                  <span class="ext-badge other">ERR</span>
-                  <span>${escapeHtml(item.original_name)}</span>
-                </div>
-              </td>
-              <td>${formatBytes(item.original_size)}</td>
-              <td><span style="color: var(--error-red); font-weight: 600;">Failed: ${escapeHtml(item.error || 'Unknown error')}</span></td>
-              <td></td>
-            `;
-          }
-          fileTableBody.appendChild(tr);
-        });
-      }
 
       function formatBytes(bytes) {
         if (!bytes || bytes === 0) return '0 B';

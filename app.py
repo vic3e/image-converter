@@ -57,19 +57,7 @@ def index():
         with open(html_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
     return HTMLResponse(content="<h1>Zuke Image Converter</h1>")
-@app.post("/api/convert")
-async def convert_api(
-    files: List[UploadFile] = File(...),
-    preset: str = Form("web"),
-    format: Optional[str] = Form(None),
-    max_width: Optional[str] = Form(None),
-    quality: Optional[str] = Form(None)
-):
-    cleanup_old_sessions()
-    if not files:
-        raise HTTPException(status_code=400, detail="No files uploaded.")
-
-    # Determine presets and defaults
+def resolve_preset_settings(preset: str, format: Optional[str] = None, max_width: Optional[str] = None, quality: Optional[str] = None):
     target_format = "webp"
     target_width = 1920
     target_quality = 80
@@ -100,6 +88,131 @@ async def convert_api(
             except ValueError:
                 target_quality = 80
 
+    return target_format, target_width, target_quality
+
+@app.post("/api/session/start")
+def session_start():
+    cleanup_old_sessions()
+    session_id = str(uuid.uuid4())
+    session_dir = os.path.join(SESSIONS_DIR, session_id)
+    converted_dir = os.path.join(session_dir, "converted")
+    os.makedirs(converted_dir, exist_ok=True)
+    return {"success": True, "session_id": session_id}
+
+@app.post("/api/session/{session_id}/convert-file")
+async def session_convert_file(
+    session_id: str,
+    file: UploadFile = File(...),
+    preset: str = Form("web"),
+    format: Optional[str] = Form(None),
+    max_width: Optional[str] = Form(None),
+    quality: Optional[str] = Form(None)
+):
+    session_dir = os.path.join(SESSIONS_DIR, session_id)
+    converted_dir = os.path.join(session_dir, "converted")
+    if not os.path.exists(converted_dir):
+        os.makedirs(converted_dir, exist_ok=True)
+
+    target_format, target_width, target_quality = resolve_preset_settings(preset, format, max_width, quality)
+    target_ext = f".{target_format}"
+
+    clean_name = os.path.basename(file.filename or "image")
+    base_name, in_ext = os.path.splitext(clean_name)
+    file_bytes = await file.read()
+    orig_size = len(file_bytes)
+    detected_ext = in_ext.lower().lstrip(".") or "auto"
+
+    out_filename = f"{base_name}{target_ext}"
+    out_filepath = os.path.join(converted_dir, out_filename)
+    counter = 1
+    while os.path.exists(out_filepath):
+        out_filename = f"{base_name}_{counter}{target_ext}"
+        out_filepath = os.path.join(converted_dir, out_filename)
+        counter += 1
+
+    try:
+        stats = convert_single_image(
+            BytesIO(file_bytes),
+            out_filepath,
+            target_ext,
+            quality=target_quality,
+            max_width=target_width
+        )
+        converted_size = os.path.getsize(out_filepath)
+        savings = 0.0
+        if orig_size > 0:
+            savings = round(((orig_size - converted_size) / orig_size) * 100, 1)
+
+        return JSONResponse({
+            "success": True,
+            "file": {
+                "id": str(uuid.uuid4())[:8],
+                "original_name": clean_name,
+                "detected_format": detected_ext.upper(),
+                "converted_name": out_filename,
+                "target_format": target_format.upper(),
+                "original_size": orig_size,
+                "converted_size": converted_size,
+                "savings_percent": savings,
+                "width": stats["width"],
+                "height": stats["height"],
+                "resized": stats["resized"],
+                "status": "success",
+                "download_url": f"/api/download/{session_id}/{out_filename}",
+                "preview_url": f"/api/preview/{session_id}/{out_filename}"
+            }
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "file": {
+                "id": str(uuid.uuid4())[:8],
+                "original_name": clean_name,
+                "detected_format": detected_ext.upper(),
+                "converted_name": out_filename,
+                "target_format": target_format.upper(),
+                "original_size": orig_size,
+                "converted_size": 0,
+                "savings_percent": 0,
+                "width": 0,
+                "height": 0,
+                "resized": False,
+                "status": "error",
+                "error": str(e)
+            }
+        })
+
+@app.post("/api/session/{session_id}/finalize")
+def session_finalize(session_id: str):
+    session_dir = os.path.join(SESSIONS_DIR, session_id)
+    converted_dir = os.path.join(session_dir, "converted")
+    if not os.path.exists(converted_dir):
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    converted_files = [f for f in os.listdir(converted_dir) if os.path.isfile(os.path.join(converted_dir, f)) and not f.endswith(".zip")]
+    zip_url = None
+    if converted_files:
+        zip_path = os.path.join(session_dir, "converted_images.zip")
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for fname in converted_files:
+                zf.write(os.path.join(converted_dir, fname), arcname=fname)
+        zip_url = f"/api/download-zip/{session_id}"
+
+    return {"success": True, "session_id": session_id, "zip_url": zip_url, "total_converted": len(converted_files)}
+
+@app.post("/api/convert")
+async def convert_api(
+    files: List[UploadFile] = File(...),
+    preset: str = Form("web"),
+    format: Optional[str] = Form(None),
+    max_width: Optional[str] = Form(None),
+    quality: Optional[str] = Form(None)
+):
+    cleanup_old_sessions()
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded.")
+
+    target_format, target_width, target_quality = resolve_preset_settings(preset, format, max_width, quality)
     session_id = str(uuid.uuid4())
     session_dir = os.path.join(SESSIONS_DIR, session_id)
     converted_dir = os.path.join(session_dir, "converted")
@@ -202,10 +315,6 @@ async def convert_api(
         "files": results
     })
 
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    return HTMLResponse(content="<h1>Zuke Image Converter API</h1>")
 
 @app.get("/api/download/{session_id}/{filename}")
 def download_file(session_id: str, filename: str):
