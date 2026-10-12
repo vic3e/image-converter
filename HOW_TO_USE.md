@@ -1,99 +1,62 @@
 # How to Use the Image Converter
 
-## One-time setup
-
-Before using this tool for the first time, install the required packages.
-Open a Terminal and run:
-
-```
-pip install Pillow pillow-heif
-```
+This tool provides two ways to convert images:
+1. **Web Dashboard (Recommended for Non-Technical Team)** — Easy drag-and-drop, folder support, smart one-click presets, and ZIP downloads.
+2. **Terminal Script** — Command-line tool with automatic format detection.
 
 ---
 
-## Step-by-step instructions
+## Option 1: Web Dashboard (Zero Technical Knowledge Needed)
 
-### 1. Place your images
+### Running Locally
+1. Open Terminal in the project folder and run:
+   ```bash
+   pip install -r requirements.txt
+   uvicorn app:app --port 8080
+   ```
+2. Open your browser at `http://localhost:8080`.
 
-Put the script (`image_converter.py`) in the folder that contains your images,
-or in a parent folder with subfolders of images. For example:
+### Hosted Cloud Version (GCP Cloud Run Free Tier)
+When deployed to Google Cloud Run, your team can access the web application at the provided HTTPS URL from any browser without installing Python or dependencies!
 
-```
-📁 Photos/
-   image_converter.py   ← script goes here
-   📁 Beach/
-      IMG_001.heic
-      IMG_002.heic
-   📁 Family/
-      IMG_003.heic
-```
-
-### 2. Run the script
-
-Open a Terminal, navigate to the folder, and run:
-
-```
-python image_converter.py
-```
-
-Or on some systems:
-
-```
-python3 image_converter.py
-```
-
-### 3. Answer the prompts
-
-The script will ask three questions:
-
-**Convert FROM** — the format your images are currently in.
-Examples: `heic`, `jpg`, `png`
-
-**Convert TO** — the format you want to convert to.
-Examples: `jpg`, `webp`, `png`
-
-**Max width in px** — optionally resize images down to a max width.
-- Type a number like `1920` or `1280` to resize
-- Press **Enter** (leave blank) to keep the original size
-
-### 4. Find your converted images
-
-Converted files are saved into a `processed/` folder inside each folder where
-images were found. Your originals are never touched.
-
-```
-📁 Photos/
-   📁 Beach/
-      IMG_001.heic          ← original, untouched
-      IMG_002.heic
-      📁 processed/
-         IMG_001.jpg        ← converted output
-         IMG_002.jpg
-   📁 Family/
-      IMG_003.heic
-      📁 processed/
-         IMG_003.jpg
-```
+### How Non-Technical Team Members Use It:
+1. **Choose a Preset:**
+   - **⚡ Web Optimized (Default):** Converts to WebP @ 1920px max width (80% quality). Saves 70–90% file size without visible quality loss. Perfect for website uploads and dashboard.
+   - **🛍️ Social & Store:** Converts to JPG @ 1200px max width (85% quality). Perfect for product listings, Instagram, and Facebook.
+   - **🎨 Lossless PNG:** Lossless PNG with original dimensions. Preserves crisp vector lines and transparency.
+   - **⚙️ Custom:** Manual selection of target format, max width, and compression quality.
+2. **Add Files or Folders:**
+   - Drag & drop images or entire folders into the dropzone.
+   - Or click **"Choose Files"** or **"Choose Folder"**.
+   - *Auto-Detection:* No need to know whether the files are Apple iPhone `.HEIC`, `.PNG`, `.JPG`, or `.WEBP`. The system automatically detects and converts all of them.
+3. **Convert & Download:**
+   - Click **"Convert All Images"**.
+   - Review file savings percentages and dimensions.
+   - Click **"Download All (ZIP)"** to save all converted images at once, or download individual files.
 
 ---
 
-## Supported formats
+## Option 2: Terminal CLI Script
 
-| Format | Notes                              |
-|--------|------------------------------------|
-| HEIC   | iPhone/iPad photos (requires setup)|
-| JPG    | Most compatible, smaller file size |
-| PNG    | Lossless, supports transparency    |
-| WEBP   | Modern web format, small & sharp   |
+The script now automatically scans the folder and detects all supported image types.
+
+1. Navigate to the folder with images:
+   ```bash
+   python3 image_converter.py
+   ```
+2. The script lists all images found (e.g. `10 HEIC, 4 PNG`).
+3. Select your output format (default: `webp`) and optional max width (default: `1920px`).
+4. Converted images are placed inside a `processed/` folder. Originals remain untouched.
 
 ---
 
-## Troubleshooting
+## Supported Formats
 
-**"pillow-heif is not installed"** — Run `pip install pillow-heif` and try again.
+| Format | Auto-Detected | Notes |
+|---|---|---|
+| **HEIC / HEIF** | Yes | Apple iPhone / iPad high-efficiency photos |
+| **JPG / JPEG** | Yes | Standard photo format |
+| **PNG** | Yes | Lossless, alpha transparency support |
+| **WEBP** | Yes | Modern high-efficiency web image |
+| **TIFF / BMP** | Yes | High-resolution bitmap images |
 
-**"No files found"** — Make sure you typed the correct input format and that
-the script is in the right folder.
-
-**Script won't open** — Make sure Python is installed. Download it from
-[python.org](https://www.python.org/downloads/).

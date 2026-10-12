@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zuke Image Converter · Fast, Auto-Detect Batch Conversion</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23FF8B00'/%3E%3Cpath d='M4 16l4.5-5.5 3.5 4.5 4-6 4 7H4z' fill='white'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-orange: #FF8B00;
+      --alt-orange: #FF7B00;
+      --orange-light: #FFF4E6;
+      --orange-focus: rgba(255, 139, 0, 0.15);
+      --dark-neutral: #2F2F2F;
+      --darker-neutral: #222222;
+      --light-bg: #F8F9FA;
+      --card-bg: #FFFFFF;
+      --border-color: #E2E4E8;
+      --border-hover: #CBD0D6;
+      --text-primary: #1F242D;
+      --text-secondary: #5F6672;
+      --text-muted: #8E95A2;
+      --success-green: #0E9F6E;
+      --success-bg: #DEF7EC;
+      --error-red: #E02424;
+      --error-bg: #FDE8E8;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 24px rgba(0,0,0,0.08);
+      --font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--light-bg);
+      color: var(--text-primary);
+      line-height: 1.5;
+      padding: 24px 16px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Page Preloader */
+    .page-preloader {
+      position: fixed;
+      inset: 0;
+      background: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+    .page-preloader.fade-out {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .brand-spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid #FFE6CC;
+      border-top-color: var(--alt-orange);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 14px;
+    }
+    .preloader-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 960px;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .app-container.visible { opacity: 1; }
+
+    /* Header */
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-logo {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, var(--primary-orange), var(--alt-orange));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFF;
+      box-shadow: 0 4px 10px rgba(255, 123, 0, 0.3);
+    }
+    .brand-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--dark-neutral);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .brand-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .badge-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--orange-light);
+      color: var(--alt-orange);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 123, 0, 0.2);
+    }
+
+    /* Section Card */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--dark-neutral);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-description {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+    }
+    /* Preset Selector Grid */
+    .presets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .preset-card {
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      background: #FAFAFA;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .preset-card:hover {
+      border-color: var(--border-hover);
+      background: #FFF;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+    .preset-card.active {
+      border-color: var(--alt-orange);
+      background: #FFF;
+      box-shadow: 0 0 0 3px var(--orange-focus);
+    }
+    .preset-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .preset-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--dark-neutral);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .preset-badge {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      background: var(--orange-light);
+      color: var(--alt-orange);
+      padding: 2px 7px;
+      border-radius: 12px;
+      letter-spacing: 0.03em;
+    }
+    .preset-spec {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--alt-orange);
+    }
+    .preset-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+    }
+
+    /* Custom settings drawer */
+    .custom-settings {
+      display: none;
+      background: #F9FAFB;
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin-top: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+    }
+    .custom-settings.visible { display: grid; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .form-control {
+      width: 100%;
+      padding: 9px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: #FFF;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .form-control:focus {
+      border-color: var(--alt-orange);
+      box-shadow: 0 0 0 3px var(--orange-focus);
+    }
+    /* Drop Zone */
+    .drop-zone {
+      border: 2px dashed #D2D6DC;
+      border-radius: var(--radius-lg);
+      padding: 34px 20px;
+      text-align: center;
+      background: #FAFBFD;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--alt-orange);
+      background: #FFF9F2;
+      box-shadow: 0 0 0 4px var(--orange-focus);
+    }
+    .drop-icon-wrap {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--orange-light);
+      color: var(--alt-orange);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      transition: transform 0.2s ease;
+    }
+    .drop-zone:hover .drop-icon-wrap { transform: scale(1.08); }
+    .drop-primary-text {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--dark-neutral);
+      margin-bottom: 4px;
+    }
+    .drop-sub-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+    }
+    .auto-detect-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #EEF2F6;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+    }
+    .btn-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-orange), var(--alt-orange));
+      color: #FFF;
+      box-shadow: 0 2px 6px rgba(255, 123, 0, 0.25);
+    }
+    .btn-primary:hover:not(:disabled) {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: #FFF;
+      color: var(--dark-neutral);
+      border-color: var(--border-color);
+    }
+    .btn-secondary:hover:not(:disabled) {
+      border-color: var(--border-hover);
+      background: #F8F9FA;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    /* Queue & Results */
+    .queue-section {
+      display: none;
+      margin-top: 20px;
+    }
+    .queue-section.visible { display: block; }
+    .queue-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .queue-stats {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--dark-neutral);
+    }
+    .file-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .file-table th {
+      text-align: left;
+      padding: 10px 12px;
+      background: #F8F9FA;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .file-table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+    .file-table tr:hover td { background: #FAFBFD; }
+    .file-name-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      color: var(--dark-neutral);
+      word-break: break-all;
+    }
+    .ext-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .ext-badge.heic, .ext-badge.heif { background: #FFE8D6; color: #D9480F; }
+    .ext-badge.png { background: #E7F5FF; color: #1971C2; }
+    .ext-badge.jpg, .ext-badge.jpeg { background: #EBFBEE; color: #2B8A3E; }
+    .ext-badge.webp { background: #F3F0FF; color: #6741D9; }
+    .ext-badge.other { background: #F1F3F5; color: #495057; }
+
+    .savings-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--success-bg);
+      color: var(--success-green);
+      padding: 3px 8px;
+      border-radius: 12px;
+    }
+
+    .progress-bar-wrap {
+      display: none;
+      margin: 18px 0;
+      background: #E9ECEF;
+      border-radius: 10px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .progress-bar-wrap.visible { display: block; }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--alt-orange), var(--primary-orange));
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .summary-card {
+      display: none;
+      background: linear-gradient(135deg, #FFFDFB, #FFF7ED);
+      border: 1px solid #FFE4C7;
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      margin-bottom: 20px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .summary-card.visible { display: flex; }
+    .summary-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--dark-neutral);
+      margin-bottom: 2px;
+    }
+    .summary-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .summary-stat-highlight {
+      font-weight: 800;
+      color: var(--alt-orange);
+    }
+
+    @media (max-width: 640px) {
+      .app-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .presets-grid { grid-template-columns: 1fr; }
+      .file-table th:nth-child(2), .file-table td:nth-child(2) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-preloader" id="pagePreloader">
+    <div class="brand-spinner"></div>
+    <div class="preloader-text">Loading Zuke Converter...</div>
+  </div>
+  <div class="app-container" id="appContainer">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-group">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Zuke Image Converter</h1>
+          <p class="brand-subtitle">Smart batch converter for non-technical teams</p>
+        </div>
+      </div>
+      <div class="badge-tag">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+        </svg>
+        Auto-Detect Enabled
+      </div>
+    </header>
+
+    <!-- Presets Card -->
+    <section class="card">
+      <h2 class="card-title">1. Choose Preset (One-Click Defaults)</h2>
+      <p class="card-description">Select how you want your images prepared. Default is optimized for speed and web display.</p>
+
+      <div class="presets-grid" id="presetsGrid">
+        <div class="preset-card active" data-preset="web">
+          <div class="preset-header">
+            <span class="preset-name">⚡ Web Optimized</span>
+            <span class="preset-badge">Default</span>
+          </div>
+          <span class="preset-spec">WebP · Max 1920px · 80%</span>
+          <p class="preset-desc">Smallest file size. Ideal for websites, blogs, and admin dashboard.</p>
+        </div>
+
+        <div class="preset-card" data-preset="ecommerce">
+          <div class="preset-header">
+            <span class="preset-name">🛍️ Social & Store</span>
+          </div>
+          <span class="preset-spec">JPG · Max 1200px · 85%</span>
+          <p class="preset-desc">Crisp e-commerce products, Instagram, and marketplace listings.</p>
+        </div>
+
+        <div class="preset-card" data-preset="lossless">
+          <div class="preset-header">
+            <span class="preset-name">🎨 Lossless PNG</span>
+          </div>
+          <span class="preset-spec">PNG · Original size · 100%</span>
+          <p class="preset-desc">Retains transparency and detail. Great for logos & graphics.</p>
+        </div>
+
+        <div class="preset-card" data-preset="custom">
+          <div class="preset-header">
+            <span class="preset-name">⚙️ Custom</span>
+          </div>
+          <span class="preset-spec">Manual Controls</span>
+          <p class="preset-desc">Pick custom format, width, and quality slider.</p>
+        </div>
+      </div>
+
+      <!-- Custom Settings Drawer -->
+      <div class="custom-settings" id="customSettings">
+        <div class="form-group">
+          <label for="customFormat">Target Format</label>
+          <select id="customFormat" class="form-control">
+            <option value="webp" selected>WebP (Modern, Small)</option>
+            <option value="jpg">JPG / JPEG (Universal)</option>
+            <option value="png">PNG (Lossless / Transparent)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="customWidth">Max Width (px)</label>
+          <select id="customWidth" class="form-control">
+            <option value="1920" selected>1920 px (Full HD)</option>
+            <option value="1200">1200 px (Product / Standard)</option>
+            <option value="800">800 px (Thumbnail)</option>
+            <option value="none">Original (No Resizing)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="customQuality">Quality (%): <span id="qualityVal">80</span></label>
+          <input type="range" id="customQuality" min="40" max="100" value="80" step="5" class="form-control" style="padding: 4px;">
+        </div>
+      </div>
+    </section>
+
+    <!-- Upload Dropzone Card -->
+    <section class="card">
+      <h2 class="card-title">2. Add Images or Entire Folder</h2>
+      <p class="card-description">Drag and drop any image files or folder. We auto-detect HEIC (iPhone photos), PNG, JPG, and WEBP.</p>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" multiple accept="image/*,.heic,.heif" style="display: none;">
+        <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+        
+        <div class="drop-icon-wrap">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+        </div>
+        <p class="drop-primary-text">Drag & drop files or folders here</p>
+        <p class="drop-sub-text">iPhone HEIC, PNG, JPG, WEBP, TIFF, BMP supported</p>
+        <div>
+          <span class="auto-detect-pill">✨ Auto-detects all file formats automatically</span>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" id="browseFilesBtn">Choose Files</button>
+          <button type="button" class="btn btn-secondary" id="browseFolderBtn">Choose Folder</button>
+        </div>
+      </div>
+    </section>
+  </div>
+    <!-- Staged Queue & Results Card -->
+    <section class="card queue-section" id="queueSection">
+      <!-- Summary Banner (shown after conversion) -->
+      <div class="summary-card" id="summaryCard">
+        <div>
+          <h3 class="summary-title" id="summaryTitle">Conversion Complete!</h3>
+          <p class="summary-sub" id="summarySub">Converted 10 files · Saved 86%</p>
+        </div>
+        <div class="btn-row">
+          <a href="#" class="btn btn-primary" id="downloadAllZipBtn" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Download All (ZIP)
+          </a>
+          <button type="button" class="btn btn-secondary btn-sm" id="resetBatchBtn">Start New Batch</button>
+        </div>
+      </div>
+
+      <!-- Action & Stats Header -->
+      <div class="queue-header">
+        <span class="queue-stats" id="queueStats">0 files staged</span>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary btn-sm" id="clearQueueBtn">Clear All</button>
+          <button type="button" class="btn btn-primary" id="convertBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            Convert All Images
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-bar-wrap" id="progressBarWrap">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+      </div>
+
+      <!-- Files Table -->
+      <table class="file-table" id="fileTable">
+        <thead>
+          <tr>
+            <th>File Name</th>
+            <th>Original Size</th>
+            <th>Converted Result</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="fileTableBody">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // 1. Preloader fade-out per Zuke guidelines
+      setTimeout(() => {
+        const preloader = document.getElementById('pagePreloader');
+        const container = document.getElementById('appContainer');
+        if (preloader) preloader.classList.add('fade-out');
+        if (container) container.classList.add('visible');
+      }, 250);
+
+      // State
+      let stagedFiles = [];
+      let currentPreset = 'web';
+
+      // Elements
+      const presetsGrid = document.getElementById('presetsGrid');
+      const customSettings = document.getElementById('customSettings');
+      const customQuality = document.getElementById('customQuality');
+      const qualityVal = document.getElementById('qualityVal');
+      const dropZone = document.getElementById('dropZone');
+      const fileInput = document.getElementById('fileInput');
+      const folderInput = document.getElementById('folderInput');
+      const browseFilesBtn = document.getElementById('browseFilesBtn');
+      const browseFolderBtn = document.getElementById('browseFolderBtn');
+      const queueSection = document.getElementById('queueSection');
+      const queueStats = document.getElementById('queueStats');
+      const fileTableBody = document.getElementById('fileTableBody');
+      const convertBtn = document.getElementById('convertBtn');
+      const clearQueueBtn = document.getElementById('clearQueueBtn');
+      const progressBarWrap = document.getElementById('progressBarWrap');
+      const progressBarFill = document.getElementById('progressBarFill');
+      const summaryCard = document.getElementById('summaryCard');
+      const summaryTitle = document.getElementById('summaryTitle');
+      const summarySub = document.getElementById('summarySub');
+      const downloadAllZipBtn = document.getElementById('downloadAllZipBtn');
+      const resetBatchBtn = document.getElementById('resetBatchBtn');
+
+      // Presets Handler
+      presetsGrid.addEventListener('click', (e) => {
+        const card = e.target.closest('.preset-card');
+        if (!card) return;
+        document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        currentPreset = card.dataset.preset;
+        if (currentPreset === 'custom') {
+          customSettings.classList.add('visible');
+        } else {
+          customSettings.classList.remove('visible');
+        }
+      });
+
+      customQuality.addEventListener('input', () => {
+        qualityVal.textContent = customQuality.value;
+      });
+
+      // File browsing triggers
+      browseFilesBtn.addEventListener('click', () => fileInput.click());
+      browseFolderBtn.addEventListener('click', () => folderInput.click());
+
+      fileInput.addEventListener('change', () => handleFilesAdded(fileInput.files));
+      folderInput.addEventListener('change', () => handleFilesAdded(folderInput.files));
+
+      // Drag and drop handling with folder traversal
+      ['dragenter', 'dragover'].forEach(name => {
+        dropZone.addEventListener(name, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(name => {
+        dropZone.addEventListener(name, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove('dragover');
+        });
+      });
+
+      dropZone.addEventListener('drop', async (e) => {
+        const items = e.dataTransfer.items;
+        if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+          const collected = [];
+          for (let i = 0; i < items.length; i++) {
+            const entry = items[i].webkitGetAsEntry();
+            if (entry) await traverseFileTree(entry, collected);
+          }
+          addFilesToStaging(collected);
+        } else if (e.dataTransfer.files.length > 0) {
+          handleFilesAdded(e.dataTransfer.files);
+        }
+      });
+
+      async function traverseFileTree(entry, collected) {
+        if (entry.isFile) {
+          await new Promise(resolve => {
+            entry.file(f => { collected.push(f); resolve(); }, resolve);
+          });
+        } else if (entry.isDirectory) {
+          const dirReader = entry.createReader();
+          const entries = await new Promise(resolve => {
+            dirReader.readEntries(res => resolve(res), () => resolve([]));
+          });
+          for (const child of entries) {
+            await traverseFileTree(child, collected);
+          }
+        }
+      }
+
+      function handleFilesAdded(fileList) {
+        addFilesToStaging(Array.from(fileList));
+      }
+
+      const VALID_EXTS = ['.heic', '.heif', '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif', '.gif'];
+
+      function addFilesToStaging(files) {
+        const valid = files.filter(f => {
+          const ext = '.' + f.name.split('.').pop().toLowerCase();
+          return VALID_EXTS.includes(ext);
+        });
+
+        if (valid.length === 0) {
+          alert('No supported image files detected. (Supported: HEIC, PNG, JPG, WEBP, etc.)');
+          return;
+        }
+
+        stagedFiles = stagedFiles.concat(valid);
+        renderQueue();
+      }
+
+      function renderQueue() {
+        if (stagedFiles.length === 0) {
+          queueSection.classList.remove('visible');
+          return;
+        }
+        queueSection.classList.add('visible');
+        summaryCard.classList.remove('visible');
+        convertBtn.disabled = false;
+        convertBtn.style.display = 'inline-flex';
+        clearQueueBtn.style.display = 'inline-flex';
+
+        const totalBytes = stagedFiles.reduce((sum, f) => sum + f.size, 0);
+        queueStats.textContent = `${stagedFiles.length} file(s) staged · Total: ${formatBytes(totalBytes)}`;
+
+        fileTableBody.innerHTML = '';
+        stagedFiles.forEach((file, index) => {
+          const ext = (file.name.split('.').pop() || 'img').toLowerCase();
+          const tr = document.createElement('tr');
+          tr.id = `row-${index}`;
+          tr.innerHTML = `
+            <td>
+              <div class="file-name-cell">
+                <span class="ext-badge ${getExtBadgeClass(ext)}">${ext.toUpperCase()}</span>
+                <span>${escapeHtml(file.name)}</span>
+              </div>
+            </td>
+            <td>${formatBytes(file.size)}</td>
+            <td><span style="color: var(--text-muted); font-size: 12px;">Ready to convert</span></td>
+            <td style="text-align: right;">
+              <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px;" onclick="removeStagedFile(${index})">&times;</button>
+            </td>
+          `;
+          fileTableBody.appendChild(tr);
+        });
+      }
+
+      window.removeStagedFile = (idx) => {
+        stagedFiles.splice(idx, 1);
+        renderQueue();
+      };
+
+      clearQueueBtn.addEventListener('click', () => {
+        stagedFiles = [];
+        renderQueue();
+      });
+
+      resetBatchBtn.addEventListener('click', () => {
+        stagedFiles = [];
+        renderQueue();
+      });
+
+      // Execute Conversion
+      convertBtn.addEventListener('click', async () => {
+        if (stagedFiles.length === 0) return;
+
+        convertBtn.disabled = true;
+        clearQueueBtn.disabled = true;
+        progressBarWrap.classList.add('visible');
+        progressBarFill.style.width = '35%';
+
+        const formData = new FormData();
+        stagedFiles.forEach(f => formData.append('files', f));
+        formData.append('preset', currentPreset);
+
+        if (currentPreset === 'custom') {
+          formData.append('format', document.getElementById('customFormat').value);
+          formData.append('max_width', document.getElementById('customWidth').value);
+          formData.append('quality', customQuality.value);
+        }
+
+        try {
+          progressBarFill.style.width = '70%';
+          const res = await fetch('/api/convert', { method: 'POST', body: formData });
+          if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+          const data = await res.json();
+          progressBarFill.style.width = '100%';
+
+          setTimeout(() => {
+            progressBarWrap.classList.remove('visible');
+            progressBarFill.style.width = '0%';
+          }, 400);
+
+          renderResults(data);
+        } catch (err) {
+          alert('Conversion failed: ' + err.message);
+          convertBtn.disabled = false;
+          clearQueueBtn.disabled = false;
+          progressBarWrap.classList.remove('visible');
+        }
+      });
+
+      function renderResults(data) {
+        convertBtn.style.display = 'none';
+        clearQueueBtn.style.display = 'none';
+
+        summaryTitle.textContent = `Conversion Complete · ${data.successful_count} of ${data.total_files} Images`;
+        summarySub.innerHTML = `Original: <strong>${formatBytes(data.total_original_size)}</strong> ➔ Converted: <strong>${formatBytes(data.total_converted_size)}</strong> (<span class="summary-stat-highlight">Saved ${data.total_savings_percent}%</span>)`;
+        
+        if (data.zip_url) {
+          downloadAllZipBtn.href = data.zip_url;
+          downloadAllZipBtn.style.display = 'inline-flex';
+        } else {
+          downloadAllZipBtn.style.display = 'none';
+        }
+        summaryCard.classList.add('visible');
+
+        fileTableBody.innerHTML = '';
+        data.files.forEach(item => {
+          const tr = document.createElement('tr');
+          if (item.status === 'success') {
+            const savingsHtml = item.savings_percent > 0 
+              ? `<span class="savings-badge">-${item.savings_percent}%</span>` 
+              : '';
+            tr.innerHTML = `
+              <td>
+                <div class="file-name-cell">
+                  <span class="ext-badge ${getExtBadgeClass(item.target_format.toLowerCase())}">${item.target_format}</span>
+                  <span>${escapeHtml(item.converted_name)}</span>
+                </div>
+              </td>
+              <td>${formatBytes(item.original_size)}</td>
+              <td>
+                <span style="font-weight: 700; color: var(--text-primary);">${formatBytes(item.converted_size)}</span>
+                ${savingsHtml}
+                <span style="color: var(--text-muted); font-size: 11px; margin-left: 6px;">(${item.width}×${item.height})</span>
+              </td>
+              <td style="text-align: right;">
+                <a href="${item.download_url}" download="${item.converted_name}" class="btn btn-primary btn-sm">
+                  Download
+                </a>
+              </td>
+            `;
+          } else {
+            tr.innerHTML = `
+              <td>
+                <div class="file-name-cell">
+                  <span class="ext-badge other">ERR</span>
+                  <span>${escapeHtml(item.original_name)}</span>
+                </div>
+              </td>
+              <td>${formatBytes(item.original_size)}</td>
+              <td><span style="color: var(--error-red); font-weight: 600;">Failed: ${escapeHtml(item.error || 'Unknown error')}</span></td>
+              <td></td>
+            `;
+          }
+          fileTableBody.appendChild(tr);
+        });
+      }
+
+      function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      }
+
+      function getExtBadgeClass(ext) {
+        ext = ext.replace('.', '').toLowerCase();
+        if (['heic', 'heif'].includes(ext)) return 'heic';
+        if (['png'].includes(ext)) return 'png';
+        if (['jpg', 'jpeg'].includes(ext)) return 'jpg';
+        if (['webp'].includes(ext)) return 'webp';
+        return 'other';
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>"']/g, m => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+        }[m]));
+      }
+    });
+  </script>
+</body>
+</html>
